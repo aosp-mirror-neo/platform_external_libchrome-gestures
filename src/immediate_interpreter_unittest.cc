@@ -4239,7 +4239,7 @@ TEST(ImmediateInterpreterTest, ZeroClickInitializationTest) {
   };
   TestInterpreterWrapper wrapper(&ii, &hwprops);
 
-  // Test touchpad with intergrated button switch.
+  // Test touchpad with integrated button switch.
   EXPECT_EQ(0, ii.zero_finger_click_enable_.val_);
   // Test touchpad with separate buttons.
   hwprops.is_button_pad = 0;
@@ -4258,6 +4258,377 @@ TEST(ImmediateInterpreterTest, PointTest) {
   EXPECT_FALSE(point != point_eq);
   EXPECT_TRUE(point != point_ne0);
   EXPECT_TRUE(point != point_ne1);
+}
+
+class DragScrollTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    hwprops_ = {
+      .right = 1000,
+      .bottom = 1000,
+      .res_x = 50,
+      .res_y = 50,
+      .orientation_minimum = 0,
+      .orientation_maximum = 0,
+      .max_finger_cnt = 5,
+      .max_touch_cnt = 5,
+      .supports_t5r2 = false,
+      .support_semi_mt = false,
+      .is_button_pad = false,
+      .has_wheel = false,
+      .wheel_is_hi_res = false,
+      .is_haptic_pad = false,
+    };
+    button_finger_ = {0, 0, 0, 0, 50, 0, 500, 500, 1, 0};
+
+    ii_.reset(new ImmediateInterpreter(nullptr, nullptr));
+    wrapper_.reset(new TestInterpreterWrapper(ii_.get(), &hwprops_));
+  }
+
+  std::unique_ptr<ImmediateInterpreter> ii_;
+  std::unique_ptr<TestInterpreterWrapper> wrapper_;
+  HardwareProperties hwprops_;
+  FingerState button_finger_;
+};
+
+TEST_F(DragScrollTest, DragScrollDisabledDefaultsToMove) {
+  ii_->drag_scroll_enable_.val_ = false;
+
+  // Frame 1: Button down.
+  HardwareState curr_frame =
+    make_hwstate(0.1, GESTURES_BUTTON_LEFT, 1, 1, &button_finger_);
+  Gesture* gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 2: Button down timeout reached, button click registered.
+  curr_frame = make_hwstate(0.2, GESTURES_BUTTON_LEFT, 1, 1, &button_finger_);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeButtonsChange, gs->type);
+
+  // Frame 3: Fingers added, no movement detected yet.
+  FingerState button_down_scroll_fingers_appear[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 450, 400, 2, 0},
+    {0, 0, 0, 0, 50, 0, 550, 400, 3, 0},
+  };
+  curr_frame = make_hwstate(0.3, GESTURES_BUTTON_LEFT, 3, 3,
+    button_down_scroll_fingers_appear);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 4: Fingers move in a scroll-like pattern.
+  // Since the flag is off, it should still be a Move gesture.
+  FingerState button_down_scrolling_1[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 442, 376, 2, 0},
+    {0, 0, 0, 0, 50, 0, 555, 383, 3, 0},
+  };
+  curr_frame = make_hwstate(0.4, GESTURES_BUTTON_LEFT,
+    3, 3, button_down_scrolling_1);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeMove, gs->type);
+
+  // Frame 5: Fingers move in a scroll-like pattern.
+  // Since the flag is off, it should still be a Move gesture.
+  FingerState button_down_scrolling_2[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 448, 364, 2, 0},
+    {0, 0, 0, 0, 50, 0, 560, 357, 3, 0},
+  };
+  curr_frame = make_hwstate(0.5, GESTURES_BUTTON_LEFT, 3, 3,
+    button_down_scrolling_2);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeMove, gs->type);
+}
+
+TEST_F(DragScrollTest, DragScrollEnabledProducesScroll) {
+  ii_->drag_scroll_enable_.val_ = true;
+
+  // Frame 1: Button down.
+  HardwareState curr_frame =
+    make_hwstate(0.1, GESTURES_BUTTON_LEFT, 1, 1, &button_finger_);
+  Gesture* gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 2: Button down timeout reached, button click registered.
+  curr_frame = make_hwstate(0.2, GESTURES_BUTTON_LEFT, 1, 1, &button_finger_);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeButtonsChange, gs->type);
+
+  // Frame 3: Fingers added, no movement detected yet.
+  FingerState fingers_appear[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 450, 400, 2, 0},
+    {0, 0, 0, 0, 50, 0, 550, 400, 3, 0},
+  };
+  curr_frame = make_hwstate(0.3, GESTURES_BUTTON_LEFT, 3, 3, fingers_appear);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 4: Fingers move in a scroll-like pattern.
+  FingerState scrolling_fingers_1[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 442, 389, 2, 0},
+    {0, 0, 0, 0, 50, 0, 555, 380, 3, 0},
+  };
+  curr_frame =
+    make_hwstate(0.4, GESTURES_BUTTON_LEFT, 3, 3, scrolling_fingers_1);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeScroll, gs->type);
+  EXPECT_EQ(0, gs->details.scroll.dx);
+  EXPECT_EQ(-20, gs->details.scroll.dy);
+
+  // Frame 5: Fingers move in a scroll-like pattern again.
+  FingerState scrolling_fingers_2[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 448, 364, 2, 0},
+    {0, 0, 0, 0, 50, 0, 560, 350, 3, 0},
+  };
+  curr_frame =
+    make_hwstate(0.5, GESTURES_BUTTON_LEFT, 3, 3, scrolling_fingers_2);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeScroll, gs->type);
+  EXPECT_EQ(0, gs->details.scroll.dx);
+  EXPECT_EQ(-30, gs->details.scroll.dy);
+}
+
+
+TEST_F(DragScrollTest, DragScrollTransitionsToFlingOnLift) {
+  ii_->drag_scroll_enable_.val_ = true;
+
+  // Frame 1: Button down.
+  HardwareState curr_frame =
+    make_hwstate(0.1, GESTURES_BUTTON_LEFT, 1, 1, &button_finger_);
+  Gesture* gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 2: Button down timeout reached, button click registered.
+  curr_frame = make_hwstate(0.2, GESTURES_BUTTON_LEFT, 1, 1, &button_finger_);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeButtonsChange, gs->type);
+
+  // Frame 3: Fingers are added.
+  FingerState fingers_appear[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 450, 400, 2, 0},
+    {0, 0, 0, 0, 50, 0, 550, 400, 3, 0},
+  };
+  curr_frame = make_hwstate(0.3, GESTURES_BUTTON_LEFT, 3, 3, fingers_appear);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 4: Scroll occurs.
+  FingerState scrolling_fingers[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 442, 391, 2, 0},
+    {0, 0, 0, 0, 50, 0, 555, 379, 3, 0},
+  };
+  curr_frame = make_hwstate(0.4, GESTURES_BUTTON_LEFT, 3, 3, scrolling_fingers);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeScroll, gs->type);
+  EXPECT_EQ(0, gs->details.scroll.dx);
+  EXPECT_EQ(-21, gs->details.scroll.dy);
+
+  // Frame 5: Fingers 2 & 3 are lifted, which should generate a Fling.
+  curr_frame = make_hwstate(0.5, GESTURES_BUTTON_LEFT, 1, 1, &button_finger_);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeFling, gs->type);
+}
+
+
+TEST_F(DragScrollTest, DragScrollRevertsToMove) {
+  ii_->drag_scroll_enable_.val_ = true;
+
+  // Frame 1: Button down.
+  HardwareState curr_frame =
+    make_hwstate(0.1, GESTURES_BUTTON_LEFT, 1, 1, &button_finger_);
+  Gesture* gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 2: Button down timeout reached, button click registered.
+  curr_frame = make_hwstate(0.2, GESTURES_BUTTON_LEFT, 1, 1, &button_finger_);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeButtonsChange, gs->type);
+
+  // Frame 3: Fingers are added.
+  FingerState fingers_appear[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 450, 400, 2, 0},
+    {0, 0, 0, 0, 50, 0, 550, 400, 3, 0},
+  };
+  curr_frame = make_hwstate(0.3, GESTURES_BUTTON_LEFT, 3, 3, fingers_appear);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 4: Scroll occurs.
+  FingerState scrolling_fingers[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 442, 382, 2, 0},
+    {0, 0, 0, 0, 50, 0, 555, 375, 3, 0},
+  };
+  curr_frame = make_hwstate(0.4, GESTURES_BUTTON_LEFT, 3, 3, scrolling_fingers);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeScroll, gs->type);
+  EXPECT_EQ(0, gs->details.scroll.dx);
+  EXPECT_EQ(-25, gs->details.scroll.dy);
+
+  // Frame 5: One scrolling finger (3) lifts. Scroll ends, fling gesture
+  // is created.
+  FingerState one_finger_lifts[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 444, 382, 2, 0},
+  };
+  curr_frame = make_hwstate(0.5, GESTURES_BUTTON_LEFT, 2, 2, one_finger_lifts);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeFling, gs->type);
+
+  // Frame 6: With only one moving finger left, it continues as a Move.
+  FingerState remaining_finger_moves[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 402, 370, 2, 0},
+  };
+  curr_frame =
+    make_hwstate(0.6, GESTURES_BUTTON_LEFT, 2, 2, remaining_finger_moves);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeMove, gs->type);
+}
+
+TEST_F(DragScrollTest, DragScrollWithThreeMovingFingers) {
+  ii_->drag_scroll_enable_.val_ = true;
+
+  // Frame 1: Button down.
+  HardwareState curr_frame =
+    make_hwstate(0.1, GESTURES_BUTTON_LEFT, 1, 1, &button_finger_);
+  Gesture* gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 2: Button down timeout reached, button click registered.
+  curr_frame = make_hwstate(0.2, GESTURES_BUTTON_LEFT, 1, 1, &button_finger_);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeButtonsChange, gs->type);
+
+  // Frame 3: Fingers 2,3 and 4 just arrived.
+  FingerState fingers_appear[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 450, 400, 2, 0},
+    {0, 0, 0, 0, 50, 0, 550, 400, 3, 0},
+    {0, 0, 0, 0, 50, 0, 650, 400, 4, 0},
+  };
+  curr_frame = make_hwstate(0.3, GESTURES_BUTTON_LEFT, 4, 4, fingers_appear);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 4: Logic should pick closest pair (2 & 3) for the scroll.
+  FingerState scrolling_fingers[] = {
+    button_finger_,
+    {0, 0, 0, 0, 50, 0, 450, 380, 2, 0},
+    {0, 0, 0, 0, 50, 0, 546, 383, 3, 0},
+    {0, 0, 0, 0, 50, 0, 650, 395, 4, 0},
+  };
+  curr_frame = make_hwstate(0.4, GESTURES_BUTTON_LEFT, 4, 4, scrolling_fingers);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeScroll, gs->type);
+  EXPECT_EQ(-20, gs->details.scroll.dy);
+}
+
+TEST_F(DragScrollTest, DragScrollEnabledNormalDrag) {
+  ii_->drag_scroll_enable_.val_ = true;
+
+  // Frame 1: Button down.
+  FingerState button_drag_finger = {0, 0, 0, 0, 50, 0, 500, 500, 1, 0};
+  HardwareState curr_frame =
+    make_hwstate(0.1, GESTURES_BUTTON_LEFT, 1, 1, &button_drag_finger);
+  Gesture* gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 2: Button down timeout reached, button click registered.
+  curr_frame =
+    make_hwstate(0.2, GESTURES_BUTTON_LEFT, 1, 1, &button_drag_finger);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeButtonsChange, gs->type);
+
+  // Frame 3: Finger moves, should be a standard Move gesture.
+  FingerState finger_pos_2 = {0, 0, 0, 0, 50, 0, 512, 533, 1, 0};
+  curr_frame = make_hwstate(0.3, GESTURES_BUTTON_LEFT, 1, 1, &finger_pos_2);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeMove, gs->type);
+  EXPECT_EQ(12, gs->details.move.dx);
+  EXPECT_EQ(33, gs->details.move.dy);
+
+  // Frame 4: Finger moves again.
+  FingerState finger_pos_3 = {0, 0, 0, 0, 50, 0, 536, 552, 1, 0};
+  curr_frame = make_hwstate(0.4, GESTURES_BUTTON_LEFT, 1, 1, &finger_pos_3);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeMove, gs->type);
+  EXPECT_EQ(24, gs->details.move.dx);
+  EXPECT_EQ(19, gs->details.move.dy);
+
+  // Frame 5: Button released.
+  curr_frame = make_hwstate(0.5, 0, 1, 1, &finger_pos_3);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeButtonsChange, gs->type);
+  EXPECT_EQ(GESTURES_BUTTON_LEFT, gs->details.buttons.up);
+}
+
+// The test validates a two-finger drag + scroll where the button finger is also
+// one of the two scrolling fingers.
+TEST_F(DragScrollTest, DragScrollTwoFingersOnly) {
+  ii_->drag_scroll_enable_.val_ = true;
+
+  // Frame 1: Button down.
+  FingerState button_finger = {0, 0, 0, 0, 50, 0, 500, 500, 1, 0};
+  HardwareState curr_frame =
+    make_hwstate(0.1, GESTURES_BUTTON_LEFT, 1, 1, &button_finger);
+  Gesture* gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 2: Button down timeout reached, button click registered.
+  curr_frame = make_hwstate(0.2, GESTURES_BUTTON_LEFT, 1, 1, &button_finger);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeButtonsChange, gs->type);
+
+  // Frame 3: A second finger is added.
+  FingerState fingers_appear[] = {
+    {0, 0, 0, 0, 50, 0, 500, 480, 1, 0},
+    {0, 0, 0, 0, 50, 0, 600, 480, 2, 0},
+  };
+  curr_frame = make_hwstate(0.3, GESTURES_BUTTON_LEFT, 2, 2, fingers_appear);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 4: Both fingers now move together in a scroll motion.
+  FingerState scrolling_fingers[] = {
+    {0, 0, 0, 0, 50, 0, 495, 464, 1, 0},
+    {0, 0, 0, 0, 50, 0, 598, 460, 2, 0},
+  };
+  curr_frame = make_hwstate(0.4, GESTURES_BUTTON_LEFT, 2, 2, scrolling_fingers);
+  gs = wrapper_->SyncInterpret(curr_frame, nullptr);
+
+  // The gesture should now be a Scroll.
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeScroll, gs->type);
+  EXPECT_EQ(0, gs->details.scroll.dx);
+  EXPECT_EQ(-20, gs->details.scroll.dy);
 }
 
 }  // namespace gestures

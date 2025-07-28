@@ -1023,6 +1023,7 @@ ImmediateInterpreter::ImmediateInterpreter(PropRegistry* prop_reg,
       tap_drag_timeout_(prop_reg, "Tap Drag Timeout", 0.3),
       tap_drag_enable_(prop_reg, "Tap Drag Enable", false),
       drag_lock_enable_(prop_reg, "Tap Drag Lock Enable", false),
+      drag_scroll_enable_(prop_reg, "Drag and Scroll Enable", false),
       tap_drag_stationary_time_(prop_reg, "Tap Drag Stationary Time", 0),
       tap_move_dist_(prop_reg, "Tap Move Distance", 2.0),
       tap_min_pressure_(prop_reg, "Tap Minimum Pressure", 25.0),
@@ -1774,6 +1775,39 @@ void ImmediateInterpreter::UpdateCurrentGestureType(
 
   // Physical button or tap overrides current gesture state
   if (sent_button_down_ || tap_to_click_state_ == kTtcDrag) {
+    if (!drag_scroll_enable_.val_) {
+      // Drag-and-Scroll feature is disabled, so force all interactions to
+      // be a Move gesture.
+      current_gesture_type_ = kGestureTypeMove;
+      return;
+    }
+
+    // A scroll/swipe was in progress, but fingers were lifted.
+    if (IsScrollOrSwipe(prev_gesture_type_) && num_gesturing < 2) {
+      current_gesture_type_ = kGestureTypeNull;
+      return;
+    }
+
+    if (num_gesturing >= 2) {
+      vector<short, kMaxGesturingFingers> sorted_ids;
+      SortFingersByProximity(gs_fingers, hwstate, &sorted_ids);
+
+      const FingerState* finger1 = hwstate.GetFingerState(sorted_ids[0]);
+      const FingerState* finger2 = hwstate.GetFingerState(sorted_ids[1]);
+
+      // Verify this pair is performing a valid scrolling gesture.
+      if (finger1 && finger2 &&
+        GetTwoFingerGestureType(*finger1, *finger2) == kGestureTypeScroll) {
+        current_gesture_type_ = kGestureTypeScroll;
+        // Set the two scrolling fingers as the 'active' ones for this gesture.
+        active_gs_fingers->clear();
+        active_gs_fingers->insert(finger1->tracking_id);
+        active_gs_fingers->insert(finger2->tracking_id);
+        return;
+      }
+    }
+
+    // Default case for a held button is a Move gesture.
     current_gesture_type_ = kGestureTypeMove;
     return;
   }

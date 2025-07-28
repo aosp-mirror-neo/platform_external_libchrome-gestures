@@ -366,9 +366,18 @@ class ImmediateInterpreter : public Interpreter, public PropertyDelegate {
   FRIEND_TEST(ImmediateInterpreterTest, WarpedFingersTappingTest);
   FRIEND_TEST(ImmediateInterpreterTest, ZeroClickInitializationTest);
   FRIEND_TEST(ImmediateInterpreterTtcEnableTest, TapToClickEnableTest);
+  FRIEND_TEST(DragScrollTest, DragScrollDisabledDefaultsToMove);
+  FRIEND_TEST(DragScrollTest, DragScrollEnabledProducesScroll);
+  FRIEND_TEST(DragScrollTest, DragScrollTransitionsToFlingOnLift);
+  FRIEND_TEST(DragScrollTest, DragScrollRevertsToMove);
+  FRIEND_TEST(DragScrollTest, DragScrollWithThreeMovingFingers);
+  FRIEND_TEST(DragScrollTest, DragScrollEnabledNormalDrag);
+  FRIEND_TEST(DragScrollTest, DragScrollTwoFingersOnly);
+
   friend class TapRecord;
   friend class TapToClickStateMachineTest;
   friend class FingerButtonClick;
+  friend class DragScrollTest;
 
  public:
   enum TapToClickState {
@@ -777,6 +786,8 @@ class ImmediateInterpreter : public Interpreter, public PropertyDelegate {
   BoolProperty tap_drag_enable_;
   // True if drag lock is enabled
   BoolProperty drag_lock_enable_;
+  // True if the Drag-and-Scroll gesture enabled
+  BoolProperty drag_scroll_enable_;
   // Time [s] the finger has to be stationary to be considered dragging
   DoubleProperty tap_drag_stationary_time_;
   // Distance [mm] a finger can move and still register a tap
