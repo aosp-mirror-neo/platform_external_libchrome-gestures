@@ -1921,8 +1921,6 @@ void ImmediateInterpreter::UpdateCurrentGestureType(
                 return;
               }
               current_gesture_type_ = GetMultiFingerGestureType(fingers, 4);
-              if (current_gesture_type_ == kGestureTypeFourFingerSwipe)
-                current_gesture_type_ = kGestureTypeFourFingerSwipe;
             }
             if (current_gesture_type_ != kGestureTypeNull) {
               active_gs_fingers->clear();
