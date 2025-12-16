@@ -4171,23 +4171,31 @@ TEST(ImmediateInterpreterTest, ScrollResetTapTest) {
     .is_haptic_pad = 0,
   };
 
+  const unsigned kBothWarpNonMove =
+      GESTURES_FINGER_WARP_X_NON_MOVE | GESTURES_FINGER_WARP_X_NON_MOVE;
+  const unsigned kWarpXNonMove = GESTURES_FINGER_WARP_X_NON_MOVE;
   FingerState finger_state[] = {
     // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID, flags
-    { 0, 0, 0, 0, 71.180000, 0, 58.446808, 24.000002, 0, 3 },  // index 0
-    { 0, 0, 0, 0, 71.180000, 0, 75.042549, 23.676924, 1, 3 },
+    // index 0
+    { 0, 0, 0, 0, 71.180000, 0, 58.446808, 24.000002, 0, kBothWarpNonMove },
+    { 0, 0, 0, 0, 71.180000, 0, 75.042549, 23.676924, 1, kBothWarpNonMove },
 
-    { 0, 0, 0, 0, 82.070000, 0, 55.276596, 23.492308, 0, 3 },  // index 2
-    { 0, 0, 0, 0, 82.070000, 0, 70.361702, 23.015387, 1, 3 },
+    // index 2
+    { 0, 0, 0, 0, 82.070000, 0, 55.276596, 23.492308, 0, kBothWarpNonMove },
+    { 0, 0, 0, 0, 82.070000, 0, 70.361702, 23.015387, 1, kBothWarpNonMove },
 
-    { 0, 0, 0, 0, 76.625000, 0, 58.542553, 23.030769, 0, 3 },  // index 4
-    { 0, 0, 0, 0, 76.625000, 0, 59.127659, 22.500002, 1, 1 },
+    // index 4
+    { 0, 0, 0, 0, 76.625000, 0, 58.542553, 23.030769, 0, kBothWarpNonMove },
+    { 0, 0, 0, 0, 76.625000, 0, 59.127659, 22.500002, 1, kWarpXNonMove },
 
     // prev_result will be scroll, we expect the tap state will be idle
     // after the sample is processed.
-    { 0, 0, 0, 0, 71.180000, 0, 61.808510, 22.569231, 0, 3 },  // index 6
-    { 0, 0, 0, 0, 71.180000, 0, 47.893616, 21.984617, 1, 1 },
+    // index 6
+    { 0, 0, 0, 0, 71.180000, 0, 61.808510, 22.569231, 0, kBothWarpNonMove },
+    { 0, 0, 0, 0, 71.180000, 0, 47.893616, 21.984617, 1, kWarpXNonMove },
 
-    { 0, 0, 0, 0, 16.730000, 0, 57.617020, 20.830770, 0, 3 },  // index 8
+    // index 8
+    { 0, 0, 0, 0, 16.730000, 0, 57.617020, 20.830770, 0, kBothWarpNonMove },
   };
 
   HardwareState hardware_states[] = {
