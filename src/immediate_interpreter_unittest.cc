@@ -394,9 +394,8 @@ TEST(ImmediateInterpreterTest, FlingTest) {
   };
   TestInterpreterWrapper wrapper(&ii, &hwprops);
 
-  FingerState finger_states[] = {
-    // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID
-    // Consistent movement for 4 frames
+  FingerState consistent_speed_fingers[] = {
+    // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID, flags
     {0, 0, 0, 0, 20, 0, 40, 20, 1, 0},
     {0, 0, 0, 0, 20, 0, 60, 20, 2, 0},
 
@@ -408,8 +407,8 @@ TEST(ImmediateInterpreterTest, FlingTest) {
 
     {0, 0, 0, 0, 20, 0, 40, 50, 1, 0},
     {0, 0, 0, 0, 20, 0, 60, 50, 2, 0},
-
-    // Increasing movement for 4 frames
+  };
+  FingerState increasing_speed_fingers[] = {
     {0, 0, 0, 0, 20, 0, 40, 20, 3, 0},
     {0, 0, 0, 0, 20, 0, 60, 20, 4, 0},
 
@@ -424,19 +423,19 @@ TEST(ImmediateInterpreterTest, FlingTest) {
   };
   HardwareState hardware_states[] = {
     // time, buttons, finger count, touch count, finger states pointer
-    make_hwstate(0.00, 0, 2, 2, &finger_states[0]),  // 0
-    make_hwstate(1.00, 0, 2, 2, &finger_states[0]),  // 1
-    make_hwstate(1.01, 0, 2, 2, &finger_states[2]),  // 2
-    make_hwstate(1.02, 0, 2, 2, &finger_states[4]),  // 3
-    make_hwstate(1.03, 0, 2, 2, &finger_states[6]),  // 4
-    make_hwstate(1.04, 0, 0, 0, nullptr),            // 5
+    make_hwstate(0.00, 0, 2, 2, &consistent_speed_fingers[0]), // 0
+    make_hwstate(1.00, 0, 2, 2, &consistent_speed_fingers[0]), // 1
+    make_hwstate(1.01, 0, 2, 2, &consistent_speed_fingers[2]), // 2
+    make_hwstate(1.02, 0, 2, 2, &consistent_speed_fingers[4]), // 3
+    make_hwstate(1.03, 0, 2, 2, &consistent_speed_fingers[6]), // 4
+    make_hwstate(1.04, 0, 0, 0, nullptr),                      // 5
 
-    make_hwstate(3.00, 0, 2, 2, &finger_states[8]),  // 6
-    make_hwstate(4.00, 0, 2, 2, &finger_states[8]),  // 7
-    make_hwstate(4.01, 0, 2, 2, &finger_states[10]), // 8
-    make_hwstate(4.02, 0, 2, 2, &finger_states[12]), // 9
-    make_hwstate(4.03, 0, 2, 2, &finger_states[14]), // 10
-    make_hwstate(4.04, 0, 0, 0, nullptr),            // 11
+    make_hwstate(3.00, 0, 2, 2, &increasing_speed_fingers[0]), // 6
+    make_hwstate(4.00, 0, 2, 2, &increasing_speed_fingers[0]), // 7
+    make_hwstate(4.01, 0, 2, 2, &increasing_speed_fingers[2]), // 8
+    make_hwstate(4.02, 0, 2, 2, &increasing_speed_fingers[4]), // 9
+    make_hwstate(4.03, 0, 2, 2, &increasing_speed_fingers[6]), // 10
+    make_hwstate(4.04, 0, 0, 0, nullptr),                      // 11
   };
 
   // Consistent movement
@@ -556,7 +555,7 @@ TEST(ImmediateInterpreterTest, ScrollReevaluateTest) {
   };
 
   FingerState finger_states[] = {
-    // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID
+    // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID, flags
     // Consistent movement for 4 frames
     {0, 0, 0, 0, 20, 0, 10, 95, 1, 0},
     {0, 0, 0, 0, 20, 0, 59, 95, 2, 0},
@@ -566,18 +565,19 @@ TEST(ImmediateInterpreterTest, ScrollReevaluateTest) {
 
     {0, 0, 0, 0, 20, 0, 10, 75, 1, 0},
     {0, 0, 0, 0, 20, 0, 59, 75, 2, 0},
-
+  };
+  FingerState fingers_too_far_apart[] = {
     // Just too far apart to be scrolling
     {0, 0, 0, 0, 20, 0, 10, 65, 1, 0},
     {0, 0, 0, 0, 20, 0, 61, 65, 2, 0},
   };
   HardwareState hardware_states[] = {
     // time, buttons, finger count, touch count, finger states pointer
-    make_hwstate(1.00, 0, 2, 2, &finger_states[0]), // 0
-    make_hwstate(2.00, 0, 2, 2, &finger_states[0]), // 1
-    make_hwstate(2.01, 0, 2, 2, &finger_states[2]), // 2
-    make_hwstate(2.02, 0, 2, 2, &finger_states[4]), // 3
-    make_hwstate(2.03, 0, 2, 2, &finger_states[6]), // 4
+    make_hwstate(1.00, 0, 2, 2, &finger_states[0]),     // 0
+    make_hwstate(2.00, 0, 2, 2, &finger_states[0]),     // 1
+    make_hwstate(2.01, 0, 2, 2, &finger_states[2]),     // 2
+    make_hwstate(2.02, 0, 2, 2, &finger_states[4]),     // 3
+    make_hwstate(2.03, 0, 2, 2, fingers_too_far_apart), // 4
   };
 
   TestInterpreterWrapper wrapper(&ii, &hwprops);
@@ -1134,22 +1134,18 @@ TEST(ImmediateInterpreterTest, ThumbRetainTest) {
     .is_haptic_pad = 0,
   };
 
-  FingerState finger_states[] = {
-    // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID
-    // id 1 = finger, 2 = thumb
-    {0, 0, 0, 0, 24, 0, 30, 30, 1, 0},
-    {0, 0, 0, 0, 58, 0, 30, 50, 2, 0},
-
-    // thumb, post-move
-    {0, 0, 0, 0, 58, 0, 50, 50, 2, 0},
-  };
+  // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID, flags
+  FingerState finger = {0, 0, 0, 0, 24, 0, 30, 30, 1, 0};
+  FingerState thumb = {0, 0, 0, 0, 58, 0, 30, 50, 2, 0};
+  FingerState thumb_moved = {0, 0, 0, 0, 58, 0, 50, 50, 2, 0};
+  FingerState finger_and_thumb[] = { finger, thumb };
   HardwareState hardware_states[] = {
     // time, buttons, finger count, touch count, finger states pointer
-    make_hwstate(0.000, 0, 2, 2, &finger_states[0]),
-    make_hwstate(0.100, 0, 2, 2, &finger_states[0]),
-    make_hwstate(0.110, 0, 1, 1, &finger_states[1]),  // finger goes away
-    make_hwstate(0.210, 0, 1, 1, &finger_states[1]),
-    make_hwstate(0.220, 0, 1, 1, &finger_states[2]),  // thumb moves
+    make_hwstate(0.000, 0, 2, 2, finger_and_thumb),
+    make_hwstate(0.100, 0, 2, 2, finger_and_thumb),
+    make_hwstate(0.110, 0, 1, 1, &thumb),  // finger goes away
+    make_hwstate(0.210, 0, 1, 1, &thumb),
+    make_hwstate(0.220, 0, 1, 1, &thumb_moved),
   };
 
   TestInterpreterWrapper wrapper(&ii, &hwprops);
@@ -1184,23 +1180,26 @@ TEST(ImmediateInterpreterTest, ThumbRetainReevaluateTest) {
     .is_haptic_pad = 0,
   };
 
-  FingerState finger_states[] = {
-    // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID
+  FingerState thumb_and_finger[] = {
+    // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID, flags
     // one thumb, one finger (it seems)
     {0, 0, 0, 0, 24, 0, 3.0, 3, 3, 0},
     {0, 0, 0, 0, 58, 0, 13.5, 3, 4, 0},
+  };
+  FingerState two_big_fingers[] = {
     // two big fingers, it turns out!
     {0, 0, 0, 0, 27, 0, 3.0, 6, 3, 0},
     {0, 0, 0, 0, 58, 0, 13.5, 6, 4, 0},
-    // they  move
+  };
+  FingerState moved_fingers[] = {
     {0, 0, 0, 0, 27, 0, 3.0, 7, 3, 0},
     {0, 0, 0, 0, 58, 0, 13.5, 7, 4, 0},
   };
   HardwareState hardware_states[] = {
     // time, buttons, finger count, touch count, finger states pointer
-    make_hwstate(1.000, 0, 2, 2, &finger_states[0]),  // 2 fingers arrive
-    make_hwstate(1.010, 0, 2, 2, &finger_states[2]),  // pressures fix
-    make_hwstate(1.100, 0, 2, 2, &finger_states[4]),  // they move
+    make_hwstate(1.000, 0, 2, 2, thumb_and_finger),  // 2 fingers arrive
+    make_hwstate(1.010, 0, 2, 2, two_big_fingers),   // pressures fix
+    make_hwstate(1.100, 0, 2, 2, moved_fingers),     // they move
   };
 
   TestInterpreterWrapper wrapper(&ii, &hwprops);
@@ -1274,8 +1273,8 @@ TEST(ImmediateInterpreterTest, AmbiguousPalmCoScrollTest) {
 
   const unsigned kPalmFlags = GESTURES_FINGER_POSSIBLE_PALM;
 
-  FingerState finger_states[] = {
-    // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID
+  FingerState stationary_palm_states[] = {
+    // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID, flags
     // stationary palm - movement
     {0, 0, 0, 0, kPr, 0,  0, 40, 1, kPalmFlags},
     {0, 0, 0, 0, kPr, 0, 30, 35, 2, 0},
@@ -1285,7 +1284,8 @@ TEST(ImmediateInterpreterTest, AmbiguousPalmCoScrollTest) {
 
     {0, 0, 0, 0, kPr, 0,  0, 40, 1, kPalmFlags},
     {0, 0, 0, 0, kPr, 0, 30, 45, 2, 0},
-
+  };
+  FingerState moving_palm_states[] = {
     // Same, but moving palm - scroll
     {0, 0, 0, 0, kPr, 0,  0, 35, 3, kPalmFlags},
     {0, 0, 0, 0, kPr, 0, 30, 35, 4, 0},
@@ -1298,12 +1298,12 @@ TEST(ImmediateInterpreterTest, AmbiguousPalmCoScrollTest) {
   };
   HardwareState hardware_state[] = {
     // time, buttons, finger count, touch count, finger states pointer
-    make_hwstate(0.0, 0, 2, 2, &finger_states[0]),
-    make_hwstate(0.1, 0, 2, 2, &finger_states[2]),
-    make_hwstate(0.2, 0, 2, 2, &finger_states[4]),
-    make_hwstate(3.0, 0, 2, 2, &finger_states[6]),
-    make_hwstate(3.1, 0, 2, 2, &finger_states[8]),
-    make_hwstate(3.2, 0, 2, 2, &finger_states[10]),
+    make_hwstate(0.0, 0, 2, 2, &stationary_palm_states[0]),
+    make_hwstate(0.1, 0, 2, 2, &stationary_palm_states[2]),
+    make_hwstate(0.2, 0, 2, 2, &stationary_palm_states[4]),
+    make_hwstate(3.0, 0, 2, 2, &moving_palm_states[0]),
+    make_hwstate(3.1, 0, 2, 2, &moving_palm_states[2]),
+    make_hwstate(3.2, 0, 2, 2, &moving_palm_states[4]),
   };
   GestureType expected_gs[] = {
     kGestureTypeNull,
@@ -2998,9 +2998,13 @@ TEST(ImmediateInterpreterTest, ClickTest) {
     // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID
     {0, 0, 0, 0, 10, 0, 50, 50, 1, 0},
     {0, 0, 0, 0, 10, 0, 70, 50, 2, 0},
+  };
+  FingerState close_fingers[] = {
     // Fingers very close together - shouldn't right click
     {0, 0, 0, 0, 10, 0, 50, 50, 1, 0},
     {0, 0, 0, 0, 10, 0, 55, 50, 2, 0},
+  };
+  FingerState large_vertical_dist_fingers[] = {
     // Large vertical dist - shouldn right click when timing is good.
     {0, 0, 0, 0, 10, 0,  8.4, 94, 1, 0},
     {0, 0, 0, 0, 10, 0, 51.2, 70, 2, 0},
@@ -3011,29 +3015,29 @@ TEST(ImmediateInterpreterTest, ClickTest) {
 
     // button down, 2 fingers touch, button up, 2 fingers lift
     {make_hwstate(1,1,0,0,nullptr),NO_DEADLINE,0,0},
-    {make_hwstate(1.01,1,2,2,&finger_states[0]), NO_DEADLINE, 0, 0},
-    {make_hwstate(2,0,2,2,&finger_states[0]),
+    {make_hwstate(1.01,1,2,2,finger_states), NO_DEADLINE, 0, 0},
+    {make_hwstate(2,0,2,2,finger_states),
      NO_DEADLINE, GESTURES_BUTTON_RIGHT, GESTURES_BUTTON_RIGHT},
     {make_hwstate(3,0,0,0,nullptr), NO_DEADLINE, 0, 0},
 
     // button down, 2 close fingers touch, fingers lift
     {make_hwstate(7,1,0,0,nullptr), NO_DEADLINE, 0, 0},
-    {make_hwstate(7.01,1,2,2,&finger_states[2]), NO_DEADLINE, 0, 0},
-    {make_hwstate(7.02,0,2,2,&finger_states[2]),
+    {make_hwstate(7.01,1,2,2,close_fingers), NO_DEADLINE, 0, 0},
+    {make_hwstate(7.02,0,2,2,close_fingers),
      NO_DEADLINE, GESTURES_BUTTON_LEFT,GESTURES_BUTTON_LEFT},
     {make_hwstate(8,0,0,0,nullptr), NO_DEADLINE, 0, 0},
 
     // button down with 2 fingers, button up, fingers lift
-    {make_hwstate(9.01,1,2,2,&finger_states[4]),NO_DEADLINE,0,0},
-    {make_hwstate(9.02,1,2,2,&finger_states[4]),NO_DEADLINE,0,0},
-    {make_hwstate(9.5,0,2,2,&finger_states[4]),
+    {make_hwstate(9.01,1,2,2,large_vertical_dist_fingers),NO_DEADLINE,0,0},
+    {make_hwstate(9.02,1,2,2,large_vertical_dist_fingers),NO_DEADLINE,0,0},
+    {make_hwstate(9.5,0,2,2,large_vertical_dist_fingers),
      NO_DEADLINE, GESTURES_BUTTON_RIGHT,GESTURES_BUTTON_RIGHT},
     {make_hwstate(10,0,0,0,nullptr), NO_DEADLINE, 0, 0},
 
     // button down with 2 fingers, timeout, button up, fingers lift
-    {make_hwstate(11,1,2,2,&finger_states[4]), NO_DEADLINE, 0, 0},
+    {make_hwstate(11,1,2,2,large_vertical_dist_fingers), NO_DEADLINE, 0, 0},
     {make_hwstate(0,0,0,0,nullptr),11.5,GESTURES_BUTTON_RIGHT,0},
-    {make_hwstate(12,0,2,2,&finger_states[4]), NO_DEADLINE, 0,
+    {make_hwstate(12,0,2,2,large_vertical_dist_fingers), NO_DEADLINE, 0,
      GESTURES_BUTTON_RIGHT},
     {make_hwstate(10,0,0,0,nullptr), NO_DEADLINE, 0, 0}
   };
