@@ -1976,11 +1976,27 @@ bool ImmediateInterpreter::IsScrollOrSwipe(GestureType gesture_type) {
 }
 
 void ImmediateInterpreter::GenerateFingerLiftGesture() {
-  // If we have just finished scrolling, we set current_gesture_type_ to the
-  // appropriate lift gesture.
-  if (IsScrollOrSwipe(prev_gesture_type_) &&
-      current_gesture_type_ != prev_gesture_type_) {
-    current_gesture_type_ = GetFingerLiftGesture(prev_gesture_type_);
+  if (!IsScrollOrSwipe(prev_gesture_type_) ||
+      current_gesture_type_ == prev_gesture_type_) {
+    return;
+  }
+  GestureType lift_gesture_type = GetFingerLiftGesture(prev_gesture_type_);
+  if (lift_gesture_type == kGestureTypeFling) {
+    // In some cases (e.g. b/433623598), scrolling can continue while a button
+    // goes down but before the button down timeout is reached. If we simply
+    // set current_gesture_type_ in this case, we'd never actually produce the
+    // fling gesture because result_ had already been set to the button change
+    // gesture. So, we need to produce it immediately. (The same issue does
+    // not seem to affect 3- and 4-finger swipes.)
+    Gesture fling;
+    scroll_manager_.FillResultFling(state_buffer_, scroll_buffer_, &fling);
+    if (fling.type == kGestureTypeFling) {
+      LogGestureProduce("ImmediateInterpreter::GenerateFingerLiftGesture",
+                        fling);
+      ProduceGesture(fling);
+    }
+  } else {
+    current_gesture_type_ = lift_gesture_type;
   }
 }
 
@@ -3338,10 +3354,7 @@ void ImmediateInterpreter::FillResultGesture(
         return;
       break;
     }
-    case kGestureTypeFling: {
-      scroll_manager_.FillResultFling(state_buffer_, scroll_buffer_, &result_);
-      break;
-    }
+    // kGestureTypeFling is handled by GenerateFingerLiftGesture.
     case kGestureTypeSwipe:
     case kGestureTypeFourFingerSwipe: {
       if (!three_finger_swipe_enable_.val_)

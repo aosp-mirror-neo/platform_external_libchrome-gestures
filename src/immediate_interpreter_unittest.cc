@@ -12,7 +12,6 @@
 #include "include/immediate_interpreter.h"
 #include "include/string_util.h"
 #include "include/unittest_util.h"
-#include "include/util.h"
 
 namespace gestures {
 
@@ -602,11 +601,10 @@ TEST(ImmediateInterpreterTest, ScrollReevaluateTest) {
   ASSERT_NE(nullptr, gs);
   EXPECT_EQ(kGestureTypeScroll, gs->type);
 
-  gs = wrapper.SyncInterpret(hardware_states[idx++], nullptr);
-  if (gs) {
-    fprintf(stderr, "gs:%si=%zd\n", gs->String().c_str(), idx);
-    EXPECT_NE(kGestureTypeScroll, gs->type);
-  }
+  std::vector<Gesture> gestures =
+      wrapper.SyncInterpretMulti(hardware_states[idx++], nullptr);
+  ASSERT_GT(gestures.size(), 0);
+  EXPECT_EQ(kGestureTypeFling, gestures[0].type);
 }
 
 
@@ -3191,6 +3189,139 @@ TEST(ImmediateInterpreterTest, ClickDragLockTest) {
     }
   }
 }
+
+// Regression test for b/433623598, where a fling gesture was not produced if a
+// scroll gesture continued during the time after we'd received a hardware state
+// with a button down but before the button down timeout was reached, resulting
+// in the fling gesture and the button change gesture needing to be produced by
+// the same call to SyncInterpret.
+TEST(ImmediateInterpreterTest, ScrollEndAndButtonChangeOnSameSync) {
+  ImmediateInterpreter ii(nullptr, nullptr);
+  HardwareProperties hwprops = {
+    .right = 1000,
+    .bottom = 1000,
+    .res_x = 50,
+    .res_y = 50,
+    .orientation_minimum = 0,
+    .orientation_maximum = 0,
+    .max_finger_cnt = 5,
+    .max_touch_cnt = 5,
+    .supports_t5r2 = false,
+    .support_semi_mt = false,
+    .is_button_pad = false,
+    .has_wheel = false,
+    .wheel_is_hi_res = false,
+    .is_haptic_pad = false,
+  };
+  TestInterpreterWrapper wrapper(&ii, &hwprops);
+
+  // Frame 1: Fingers are added.
+  FingerState fingers_appear[] = {
+    {0, 0, 0, 0, 50, 0, 450, 400, 2, 0},
+    {0, 0, 0, 0, 50, 0, 480, 400, 3, 0},
+  };
+  HardwareState curr_frame =
+      make_hwstate(0.1, GESTURES_BUTTON_NONE, 2, 2, fingers_appear);
+  Gesture* gs = wrapper.SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 2: Scroll occurs.
+  FingerState scrolling_fingers[] = {
+    {0, 0, 0, 0, 50, 0, 450, 391, 2, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 480, 379, 3, GESTURES_FINGER_TREND_DEC_Y},
+  };
+  curr_frame = make_hwstate(0.2, GESTURES_BUTTON_NONE, 2, 2, scrolling_fingers);
+  gs = wrapper.SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeScroll, gs->type);
+
+  // Frame 3: fingers stay still, but the button gets pressed
+  FingerState scrolling_fingers_2[] = {
+    {0, 0, 0, 0, 50, 0, 450, 381, 2, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 480, 369, 3, GESTURES_FINGER_TREND_DEC_Y},
+  };
+  curr_frame =
+      make_hwstate(0.3, GESTURES_BUTTON_LEFT, 2, 2, scrolling_fingers_2);
+  gs = wrapper.SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeScroll, gs->type);
+
+  // Frame 4: Button down timeout reached. A fling should be sent before the
+  // button click is registered.
+  curr_frame =
+      make_hwstate(0.4, GESTURES_BUTTON_LEFT, 2, 2, scrolling_fingers_2);
+  std::vector<Gesture> gestures =
+      wrapper.SyncInterpretMulti(curr_frame, nullptr);
+  ASSERT_EQ(2, gestures.size());
+  EXPECT_EQ(kGestureTypeFling, gestures[0].type);
+  EXPECT_EQ(GESTURES_FLING_START, gestures[0].details.fling.fling_state);
+  EXPECT_EQ(kGestureTypeButtonsChange, gestures[1].type);
+}
+
+TEST(ImmediateInterpreterTest, SwipeEndAndButtonChangeOnSameSync) {
+  ImmediateInterpreter ii(nullptr, nullptr);
+  HardwareProperties hwprops = {
+    .right = 1000,
+    .bottom = 1000,
+    .res_x = 50,
+    .res_y = 50,
+    .orientation_minimum = 0,
+    .orientation_maximum = 0,
+    .max_finger_cnt = 5,
+    .max_touch_cnt = 5,
+    .supports_t5r2 = false,
+    .support_semi_mt = false,
+    .is_button_pad = false,
+    .has_wheel = false,
+    .wheel_is_hi_res = false,
+    .is_haptic_pad = false,
+  };
+  TestInterpreterWrapper wrapper(&ii, &hwprops);
+
+  // Frame 1: Fingers are added.
+  FingerState fingers_appear[] = {
+    {0, 0, 0, 0, 50, 0, 450, 400, 2, 0},
+    {0, 0, 0, 0, 50, 0, 480, 400, 3, 0},
+    {0, 0, 0, 0, 50, 0, 510, 400, 4, 0},
+  };
+  HardwareState curr_frame =
+      make_hwstate(0.1, GESTURES_BUTTON_NONE, 3, 3, fingers_appear);
+  Gesture* gs = wrapper.SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 2: Swiping begins.
+  FingerState swiping_fingers[] = {
+    {0, 0, 0, 0, 50, 0, 450, 391, 2, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 480, 379, 3, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 510, 379, 4, GESTURES_FINGER_TREND_DEC_Y},
+  };
+  curr_frame = make_hwstate(0.2, GESTURES_BUTTON_NONE, 3, 3, swiping_fingers);
+  gs = wrapper.SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeSwipe, gs->type);
+
+  // Frame 3: fingers keep moving, but the button gets pressed.
+  FingerState swiping_fingers_2[] = {
+    {0, 0, 0, 0, 50, 0, 450, 371, 2, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 480, 359, 3, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 510, 359, 4, GESTURES_FINGER_TREND_DEC_Y},
+  };
+  curr_frame = make_hwstate(0.3, GESTURES_BUTTON_LEFT, 3, 3, swiping_fingers_2);
+  // It would also be fine if the swipe lift occurred in the next frame, just so
+  // long as it gets reported before the button change, but to keep the test
+  // simple we assert that it specifically happens here.
+  gs = wrapper.SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeSwipeLift, gs->type);
+  EXPECT_EQ(GESTURES_FLING_START, gs->details.fling.fling_state);
+
+  // Frame 4: Button down timeout reached.
+  curr_frame = make_hwstate(0.4, GESTURES_BUTTON_LEFT, 3, 3, swiping_fingers_2);
+  gs = wrapper.SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeButtonsChange, gs->type);
+}
+
 
 struct BottomRightClickAreaParameters {
   bool enabled;
