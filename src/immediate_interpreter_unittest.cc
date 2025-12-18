@@ -973,15 +973,34 @@ TEST(ImmediateInterpreterTest, NoLiftoffScrollTest) {
   }
 }
 
-struct HardwareStateAnScrollExpectations {
-  HardwareState hs;
-  float dx;
-  float dy;
-};
+class DiagonalScrollingSnapTest : public ::testing::Test {
+ protected:
+  Gesture* scroll_with_offset(float x_offset, float y_offset, unsigned flags) {
+    const float kStartX0 = 40;
+    const float kStartX1 = 60;
+    const float kStartY = 50;
+    FingerState start_finger_states[] = {
+      // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID, flags
+      {0, 0, 0, 0, 50, 0, kStartX0, kStartY, 1, 0},
+      {0, 0, 0, 0, 50, 0, kStartX1, kStartY, 2, 0},
+    };
+    FingerState end_finger_states[] = {
+      // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID, flags
+      {0, 0, 0, 0, 50, 0, kStartX0 + x_offset, kStartY + y_offset, 1, flags},
+      {0, 0, 0, 0, 50, 0, kStartX1 + x_offset, kStartY + y_offset, 2, flags},
+    };
+    HardwareState hardware_states[] = {
+      // time, buttons, finger count, touch count, finger states pointer
+      make_hwstate(0.000, 0, 2, 2, start_finger_states),
+      make_hwstate(1.000, 0, 2, 2, start_finger_states),
+      make_hwstate(1.010, 0, 2, 2, end_finger_states),
+    };
+    EXPECT_EQ(nullptr, wrapper_.SyncInterpret(hardware_states[0], nullptr));
+    EXPECT_EQ(nullptr, wrapper_.SyncInterpret(hardware_states[1], nullptr));
+    return wrapper_.SyncInterpret(hardware_states[2], nullptr);
+  }
 
-TEST(ImmediateInterpreterTest, DiagonalSnapTest) {
-  std::unique_ptr<ImmediateInterpreter> ii;
-  HardwareProperties hwprops = {
+  HardwareProperties hwprops_ = {
     .right = 100,
     .bottom = 100,
     .res_x = 1,
@@ -997,93 +1016,37 @@ TEST(ImmediateInterpreterTest, DiagonalSnapTest) {
     .wheel_is_hi_res = 0,
     .is_haptic_pad = 0,
   };
-  TestInterpreterWrapper wrapper(ii.get(), &hwprops);
+  ImmediateInterpreter ii_ = ImmediateInterpreter(nullptr, nullptr);
+  TestInterpreterWrapper wrapper_ = TestInterpreterWrapper(&ii_, &hwprops_);
+};
 
-  const float kBig = 5;  // mm
-  const float kSml = 1;  // mm
+TEST_F(DiagonalScrollingSnapTest, PerfectDiagonalMovementScrollsDiagonally) {
+  Gesture* gs = scroll_with_offset(/*x_offset=*/5, /*y_offset=*/5, /*flags=*/0);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeScroll, gs->type);
+  EXPECT_FLOAT_EQ(5, gs->details.scroll.dx);
+  EXPECT_FLOAT_EQ(5, gs->details.scroll.dy);
+}
 
-  const float kX0 = 40;
-  const float kX1 = 60;
-  const float kY = 50;  // heh
+TEST_F(DiagonalScrollingSnapTest, AlmostVerticalMovementSnapsToVertical) {
+  Gesture* gs = scroll_with_offset(/*x_offset=*/1, /*y_offset=*/5, /*flags=*/0);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeScroll, gs->type);
+  EXPECT_FLOAT_EQ(0, gs->details.scroll.dx);
+  EXPECT_FLOAT_EQ(5, gs->details.scroll.dy);
+}
 
-  FingerState finger_states[] = {
-    // TM, Tm, WM, Wm, Press, Orientation, X, Y, TrID, flags
+TEST_F(DiagonalScrollingSnapTest, AlmostHorizontalMovementSnapsToHorizontal) {
+  Gesture* gs = scroll_with_offset(/*x_offset=*/5, /*y_offset=*/1, /*flags=*/0);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeScroll, gs->type);
+  EXPECT_FLOAT_EQ(5, gs->details.scroll.dx);
+  EXPECT_FLOAT_EQ(0, gs->details.scroll.dy);
+}
 
-    // Perfect diagonal movement - should scroll diagonally
-    {0, 0, 0, 0, 50, 0, kX0, kY, 1, 0},
-    {0, 0, 0, 0, 50, 0, kX1, kY, 2, 0},
-
-    {0, 0, 0, 0, 50, 0, kX0 + kBig, kY + kBig, 1, 0},
-    {0, 0, 0, 0, 50, 0, kX1 + kBig, kY + kBig, 2, 0},
-
-    // Almost vertical movement - should snap to vertical
-    {0, 0, 0, 0, 50, 0, kX0, kY, 3, 0},
-    {0, 0, 0, 0, 50, 0, kX1, kY, 4, 0},
-
-    {0, 0, 0, 0, 50, 0, kX0 + kSml, kY + kBig, 3, 0},
-    {0, 0, 0, 0, 50, 0, kX1 + kSml, kY + kBig, 4, 0},
-
-    // Almost horizontal movement - should snap to horizontal
-    {0, 0, 0, 0, 50, 0, kX0, kY, 5, 0},
-    {0, 0, 0, 0, 50, 0, kX1, kY, 6, 0},
-
-    {0, 0, 0, 0, 50, 0, kX0 + kBig, kY + kSml, 5, 0},
-    {0, 0, 0, 0, 50, 0, kX1 + kBig, kY + kSml, 6, 0},
-
-    // Vertical movement with Warp - shouldn't scroll
-    {0, 0, 0, 0, 50, 0, kX0, kY, 7, 0},
-    {0, 0, 0, 0, 50, 0, kX1, kY, 8, 0},
-
-    {0, 0, 0, 0, 50, 0, kX0, kY + kBig, 7, GESTURES_FINGER_WARP_Y},
-    {0, 0, 0, 0, 50, 0, kX1, kY + kBig, 8, GESTURES_FINGER_WARP_Y},
-  };
-  HardwareStateAnScrollExpectations hardware_states[] = {
-    // time, buttons, finger count, touch count, finger states pointer
-    { make_hwstate(0.000, 0, 2, 2, &finger_states[0]),
-      0, 0 },
-    { make_hwstate(1.000, 0, 2, 2, &finger_states[0]),
-      0, 0 },
-    { make_hwstate(1.010, 0, 2, 2, &finger_states[2]),
-      kBig, kBig },
-
-    { make_hwstate(0.000, 0, 2, 2, &finger_states[4]),
-      0, 0 },
-    { make_hwstate(1.000, 0, 2, 2, &finger_states[4]),
-      0, 0 },
-    { make_hwstate(1.010, 0, 2, 2, &finger_states[6]),
-      0, kBig },
-
-    { make_hwstate(0.000, 0, 2, 2, &finger_states[8]),
-      0, 0 },
-    { make_hwstate(1.000, 0, 2, 2, &finger_states[8]),
-      0, 0 },
-    { make_hwstate(1.010, 0, 2, 2, &finger_states[10]),
-      kBig, 0 },
-
-    { make_hwstate(0.000, 0, 2, 2, &finger_states[12]),
-      0, 0 },
-    { make_hwstate(1.000, 0, 2, 2, &finger_states[12]),
-      0, 0 },
-    { make_hwstate(1.010, 0, 2, 2, &finger_states[14]),
-      0, 0 },
-  };
-
-  for (size_t i = 0; i < arraysize(hardware_states); i++) {
-    HardwareStateAnScrollExpectations& hse = hardware_states[i];
-    if (hse.hs.timestamp == 0.0) {
-      ii.reset(new ImmediateInterpreter(nullptr, nullptr));
-      wrapper.Reset(ii.get());
-    }
-    Gesture* gs = wrapper.SyncInterpret(hse.hs, nullptr);
-    if (hse.dx == 0.0 && hse.dy == 0.0) {
-      EXPECT_EQ(nullptr, gs);
-      continue;
-    }
-    ASSERT_NE(nullptr, gs);
-    EXPECT_EQ(kGestureTypeScroll, gs->type);
-    EXPECT_FLOAT_EQ(hse.dx, gs->details.scroll.dx);
-    EXPECT_FLOAT_EQ(hse.dy, gs->details.scroll.dy);
-  }
+TEST_F(DiagonalScrollingSnapTest, VerticalMovementWithWarpDoesntScroll) {
+  ASSERT_EQ(nullptr, scroll_with_offset(/*x_offset=*/0, /*y_offset=*/5,
+                                        GESTURES_FINGER_WARP_Y));
 }
 
 TEST(ImmediateInterpreterTest, RestingFingerTest) {
