@@ -10,6 +10,7 @@
 #include <cstring>
 #include <functional>
 #include <limits>
+#include <optional>
 #include <tuple>
 #include <vector>
 
@@ -666,11 +667,11 @@ bool ScrollManager::SuppressStationaryFingerMovement(const FingerState& fs,
   return true;
 }
 
-void ScrollManager::FillResultFling(const HardwareStateBuffer& state_buffer,
-                                 const ScrollEventBuffer& scroll_buffer,
-                                 Gesture* result) {
+std::optional<Gesture> ScrollManager::FillResultFling(
+    const HardwareStateBuffer& state_buffer,
+    const ScrollEventBuffer& scroll_buffer) {
   if (!did_generate_scroll_)
-    return;
+    return std::nullopt;
   ScrollEvent out = { 0.0, 0.0, 0.0 };
   ScrollEvent zero = { 0.0, 0.0, 0.0 };
   size_t count = 0;
@@ -706,13 +707,9 @@ void ScrollManager::FillResultFling(const HardwareStateBuffer& state_buffer,
 done:
   float vx = out.dt ? (out.dx / out.dt) : 0.0;
   float vy = out.dt ? (out.dy / out.dt) : 0.0;
-  *result = Gesture(kGestureFling,
-                    state_buffer.Get(1).timestamp,
-                    state_buffer.Get(0).timestamp,
-                    vx,
-                    vy,
-                    GESTURES_FLING_START);
   did_generate_scroll_ = false;
+  return Gesture(kGestureFling, state_buffer.Get(1).timestamp,
+                 state_buffer.Get(0).timestamp, vx, vy, GESTURES_FLING_START);
 }
 
 FingerButtonClick::FingerButtonClick(const ImmediateInterpreter* interpreter)
@@ -1988,12 +1985,12 @@ void ImmediateInterpreter::GenerateFingerLiftGesture() {
     // fling gesture because result_ had already been set to the button change
     // gesture. So, we need to produce it immediately. (The same issue does
     // not seem to affect 3- and 4-finger swipes.)
-    Gesture fling;
-    scroll_manager_.FillResultFling(state_buffer_, scroll_buffer_, &fling);
-    if (fling.type == kGestureTypeFling) {
+    std::optional<Gesture> fling =
+        scroll_manager_.FillResultFling(state_buffer_, scroll_buffer_);
+    if (fling.has_value()) {
       LogGestureProduce("ImmediateInterpreter::GenerateFingerLiftGesture",
-                        fling);
-      ProduceGesture(fling);
+                        fling.value());
+      ProduceGesture(fling.value());
     }
   } else {
     current_gesture_type_ = lift_gesture_type;
