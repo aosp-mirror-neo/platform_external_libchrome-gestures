@@ -353,6 +353,7 @@ class ImmediateInterpreter : public Interpreter, public PropertyDelegate {
   FRIEND_TEST(ImmediateInterpreterTest, PalmReevaluateTest);
   FRIEND_TEST(ImmediateInterpreterTest, PalmTest);
   FRIEND_TEST(ImmediateInterpreterTest, PinchTests);
+  FRIEND_TEST(ImmediateInterpreterTest, PinchInterruptedByButtonDown);
   FRIEND_TEST(ImmediateInterpreterTest, ScrollResetTapTest);
   FRIEND_TEST(ImmediateInterpreterTest, ScrollThenFalseTapTest);
   FRIEND_TEST(ImmediateInterpreterTest, SemiMtActiveAreaTest);

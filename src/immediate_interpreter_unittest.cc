@@ -3753,6 +3753,176 @@ TEST(ImmediateInterpreterTest, PinchTests) {
   }
 }
 
+TEST(ImmediateInterpreterTest, PinchInterruptedByButtonDown) {
+  ImmediateInterpreter ii(/*prop_reg=*/nullptr, /*tracer=*/nullptr);
+  ii.pinch_enable_.val_ = 1;
+  ii.change_timeout_.val_ = 0.004;
+  HardwareProperties hwprops = {
+      .right = 100,
+      .bottom = 100,
+      .res_x = 1,
+      .res_y = 1,
+      .orientation_minimum = -1,
+      .orientation_maximum = 2,
+      .max_finger_cnt = 2,
+      .max_touch_cnt = 5,
+      .supports_t5r2 = 0,
+      .support_semi_mt = 0,
+      .is_button_pad = 1,
+      .has_wheel = 0,
+      .wheel_is_hi_res = 0,
+      .is_haptic_pad = 0,
+  };
+
+  TestInterpreterWrapper wrapper(&ii, &hwprops);
+  stime_t timeout = NO_DEADLINE;
+  Gesture* gs = nullptr;
+  FingerState finger_states[2] = {{.touch_major = 0,
+                                   .touch_minor = 0,
+                                   .width_major = 0,
+                                   .width_minor = 0,
+                                   .pressure = 20,
+                                   .orientation = 0,
+                                   .position_x = 40.f,
+                                   .position_y = 40.f,
+                                   .tracking_id = 1,
+                                   .flags = 0},
+                                  {.touch_major = 0,
+                                   .touch_minor = 0,
+                                   .width_major = 0,
+                                   .width_minor = 0,
+                                   .pressure = 20,
+                                   .orientation = 0,
+                                   .position_x = 90.f,
+                                   .position_y = 90.f,
+                                   .tracking_id = 2,
+                                   .flags = 0}};
+  HardwareState hwstate =
+      make_hwstate(/*timestamp=*/1.000f, /*buttons_down=*/0, /*finger_cnt=*/2,
+                   /*touch_cnt=*/2, /*fingers=*/finger_states);
+
+  auto MoveFingersApart = [](FingerState* finger_states) {
+    finger_states[0].position_x -= 1.f;
+    finger_states[0].position_y -= 1.f;
+    finger_states[1].position_x += 1.f;
+    finger_states[1].position_y += 1.f;
+  };
+
+  // Start gesture
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_EQ(nullptr, gs);
+
+  // Waiting for pinch to start
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_EQ(nullptr, gs);
+
+  // Waiting for pinch to start
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_EQ(nullptr, gs);
+
+  // Pinch starts
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypePinch, gs->type);
+  EXPECT_EQ(GESTURES_ZOOM_START, gs->details.pinch.zoom_state);
+
+  // Pinch continues
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypePinch, gs->type);
+  EXPECT_EQ(GESTURES_ZOOM_UPDATE, gs->details.pinch.zoom_state);
+
+  // Pinch continues
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypePinch, gs->type);
+  EXPECT_EQ(GESTURES_ZOOM_UPDATE, gs->details.pinch.zoom_state);
+
+  // Button down, pinch ends
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  hwstate.buttons_down = 1;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypePinch, gs->type);
+  EXPECT_EQ(GESTURES_ZOOM_END, gs->details.pinch.zoom_state);
+
+  // Waiting for timer to expire
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.003f;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_EQ(nullptr, gs);
+
+  // Timer expired
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  wrapper.HandleTimer(hwstate.timestamp, /*timeout=*/nullptr);
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeMove, gs->type);
+
+  // Pinch doesn't get restarted while button is down
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeMove, gs->type);
+
+  // Pinch doesn't get restarted while button is down
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeMove, gs->type);
+
+  // Pinch doesn't get restarted while button is down
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeMove, gs->type);
+
+  // Button up
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  hwstate.buttons_down = 0;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeButtonsChange, gs->type);
+
+  // Waiting for the change timeout to expire to restart the pinch.
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.003f;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_EQ(nullptr, gs);
+
+  // Pinch restarted.
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypePinch, gs->type);
+  EXPECT_EQ(GESTURES_ZOOM_START, gs->details.pinch.zoom_state);
+
+  // Restarted pinch continues.
+  MoveFingersApart(finger_states);
+  hwstate.timestamp += 0.001f;
+  gs = wrapper.SyncInterpret(hwstate, &timeout);
+  EXPECT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypePinch, gs->type);
+  EXPECT_EQ(GESTURES_ZOOM_UPDATE, gs->details.pinch.zoom_state);
+}
+
 struct AvoidAccidentalPinchTestInput {
   TestCaseStartOrContinueFlag flag;
   stime_t now;

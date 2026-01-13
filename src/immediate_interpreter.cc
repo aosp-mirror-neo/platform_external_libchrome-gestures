@@ -2095,6 +2095,10 @@ bool ImmediateInterpreter::UpdatePinchState(
     return false;
   }
 
+  if (hwstate.buttons_down != 0) {
+    return false;
+  }
+
   // check if we have two valid fingers
   if (gs_fingers.size() != 2) {
     return false;
