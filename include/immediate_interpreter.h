@@ -343,7 +343,6 @@ class FingerButtonClick {
 class ImmediateInterpreter : public Interpreter, public PropertyDelegate {
   FRIEND_TEST(ImmediateInterpreterBottomRightTest, BottomRightClickAreaTest);
   FRIEND_TEST(ImmediateInterpreterTest, AmbiguousPalmCoScrollTest);
-  FRIEND_TEST(ImmediateInterpreterTest, AvoidAccidentalPinchTest);
   FRIEND_TEST(ImmediateInterpreterTest, ChangeTimeoutTest);
   FRIEND_TEST(ImmediateInterpreterTest, ClickTest);
   FRIEND_TEST(ImmediateInterpreterTest, FlingDepthTest);
@@ -377,6 +376,7 @@ class ImmediateInterpreter : public Interpreter, public PropertyDelegate {
   FRIEND_TEST(DragScrollTest, DragScrollTwoFingersOnly);
 
   friend class TapRecord;
+  friend class AvoidAccidentalPinchTest;
   friend class TapToClickStateMachineTest;
   friend class FingerButtonClick;
   friend class DragScrollTest;
