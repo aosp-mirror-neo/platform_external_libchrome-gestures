@@ -16,62 +16,31 @@ namespace gestures {
 // Takes ownership of |next|:
 IntegralGestureFilterInterpreter::IntegralGestureFilterInterpreter(
     Interpreter* next, Tracer* tracer)
-    : FilterInterpreter(nullptr, next, tracer, false),
+    : FilterInterpreterWithTimer(nullptr, next, tracer, false),
       hscroll_remainder_(0.0),
       vscroll_remainder_(0.0),
       hscroll_ordinal_remainder_(0.0),
-      vscroll_ordinal_remainder_(0.0),
-      remainder_reset_deadline_(NO_DEADLINE) {
+      vscroll_ordinal_remainder_(0.0) {
   InitName();
 }
 
 void IntegralGestureFilterInterpreter::SyncInterpretImpl(
-    HardwareState& hwstate, stime_t* timeout) {
+    HardwareState& hwstate, stime_t* next_timeout) {
   const char name[] = "IntegralGestureFilterInterpreter::SyncInterpretImpl";
   LogHardwareStatePre(name, hwstate);
 
   can_clear_remainders_ = hwstate.finger_cnt == 0 && hwstate.touch_cnt == 0;
-  stime_t next_timeout = NO_DEADLINE;
 
   LogHardwareStatePost(name, hwstate);
-  next_->SyncInterpret(hwstate, &next_timeout);
-  *timeout = SetNextDeadlineAndReturnTimeoutVal(
-      hwstate.timestamp, remainder_reset_deadline_, next_timeout);
+  next_->SyncInterpret(hwstate, next_timeout);
 }
 
-void IntegralGestureFilterInterpreter::HandleTimerImpl(
-    stime_t now, stime_t *timeout) {
-  const char name[] = "IntegralGestureFilterInterpreter::HandleTimerImpl";
-  LogHandleTimerPre(name, now, timeout);
+void IntegralGestureFilterInterpreter::HandleLocalTimer(stime_t now) {
+  if (can_clear_remainders_)
+    hscroll_ordinal_remainder_ = vscroll_ordinal_remainder_ =
+        hscroll_remainder_ = vscroll_remainder_ = 0.0;
 
-  stime_t next_timeout;
-  // TODO(b/483321024): deduplicate this logic with other filter interpreters
-  // and write unit tests for it.
-  if (ShouldCallNextTimer(remainder_reset_deadline_)) {
-    if (next_timer_deadline_ > now) {
-      Err("Spurious callback. now: %f, next deadline: %f",
-          now, next_timer_deadline_);
-      return;
-    }
-    next_timeout = NO_DEADLINE;
-    next_->HandleTimer(now, &next_timeout);
-  } else {
-    if (remainder_reset_deadline_ > now) {
-      Err("Spurious callback. now: %f, remainder reset deadline: %f",
-          now, remainder_reset_deadline_);
-      return;
-    }
-    if (can_clear_remainders_)
-      hscroll_ordinal_remainder_ = vscroll_ordinal_remainder_ =
-          hscroll_remainder_ = vscroll_remainder_ = 0.0;
-
-    remainder_reset_deadline_ = NO_DEADLINE;
-    next_timeout = MaybeCallNextTimer(now);
-  }
-  *timeout = SetNextDeadlineAndReturnTimeoutVal(now,
-                                                remainder_reset_deadline_,
-                                                next_timeout);
-  LogHandleTimerPost(name, now, timeout);
+  local_timer_deadline_ = NO_DEADLINE;
 }
 
 namespace {
@@ -121,7 +90,7 @@ void IntegralGestureFilterInterpreter::ConsumeGesture(const Gesture& gesture) {
         LogGestureProduce(name, fling_tap_down);
         ProduceGesture(fling_tap_down);
       }
-      remainder_reset_deadline_ = copy.end_time + 1.0;
+      local_timer_deadline_ = copy.end_time + 1.0;
       break;
     case kGestureTypeMouseWheel:
       copy.details.wheel.dx = Truncate(copy.details.wheel.dx,
@@ -134,7 +103,7 @@ void IntegralGestureFilterInterpreter::ConsumeGesture(const Gesture& gesture) {
         LogGestureProduce(name, copy);
         ProduceGesture(copy);
       }
-      remainder_reset_deadline_ = copy.end_time + 1.0;
+      local_timer_deadline_ = copy.end_time + 1.0;
       break;
     default:
       LogGestureProduce(name, gesture);

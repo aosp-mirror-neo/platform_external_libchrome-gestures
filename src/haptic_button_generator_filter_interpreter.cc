@@ -16,11 +16,10 @@ namespace gestures {
 
 HapticButtonGeneratorFilterInterpreter::HapticButtonGeneratorFilterInterpreter(
     PropRegistry* prop_reg, Interpreter* next, Tracer* tracer)
-    : FilterInterpreter(nullptr, next, tracer, false),
+    : FilterInterpreterWithTimer(nullptr, next, tracer, false),
       release_suppress_factor_(1.0),
       active_gesture_(false),
       active_gesture_timeout_(0.1),
-      active_gesture_deadline_(NO_DEADLINE),
       button_down_(false),
       dynamic_down_threshold_(0.0),
       dynamic_up_threshold_(0.0),
@@ -56,19 +55,16 @@ void HapticButtonGeneratorFilterInterpreter::Initialize(
 }
 
 void HapticButtonGeneratorFilterInterpreter::SyncInterpretImpl(
-    HardwareState& hwstate, stime_t* timeout) {
+    HardwareState& hwstate, stime_t* next_timeout) {
   const char name[] =
       "HapticButtonGeneratorFilterInterpreter::SyncInterpretImpl";
   LogHardwareStatePre(name, hwstate);
 
   HandleHardwareState(hwstate);
-  stime_t next_timeout = NO_DEADLINE;
 
   LogHardwareStatePost(name, hwstate);
-  next_->SyncInterpret(hwstate, &next_timeout);
+  next_->SyncInterpret(hwstate, next_timeout);
   UpdatePalmState(hwstate);
-  *timeout = SetNextDeadlineAndReturnTimeoutVal(
-      hwstate.timestamp, active_gesture_deadline_, next_timeout);
 }
 
 void HapticButtonGeneratorFilterInterpreter::HandleHardwareState(
@@ -166,34 +162,12 @@ void HapticButtonGeneratorFilterInterpreter::UpdatePalmState(
 }
 
 
-void HapticButtonGeneratorFilterInterpreter::HandleTimerImpl(
-    stime_t now, stime_t *timeout) {
-  const char name[] = "HapticButtonGeneratorFilterInterpreter::HandleTimerImpl";
-  LogHandleTimerPre(name, now, timeout);
-
-  stime_t next_timeout;
-  // TODO(b/483321024): deduplicate this logic with other filter interpreters
-  // and write unit tests for it.
-  if (ShouldCallNextTimer(active_gesture_deadline_)) {
-    next_timeout = NO_DEADLINE;
-    next_->HandleTimer(now, &next_timeout);
-  } else {
-    if (active_gesture_deadline_ > now) {
-      Err("Spurious callback. now: %f, active gesture deadline: %f",
-          now, active_gesture_deadline_);
-      return;
-    }
-    // If enough time has passed without an active gesture event assume that we
-    // missed the gesture ending event, to prevent a state where the button is
-    // stuck down.
-    active_gesture_ = false;
-    active_gesture_deadline_ = NO_DEADLINE;
-    next_timeout = MaybeCallNextTimer(now);
-  }
-  *timeout = SetNextDeadlineAndReturnTimeoutVal(now,
-                                                active_gesture_deadline_,
-                                                next_timeout);
-  LogHandleTimerPost(name, now, timeout);
+void HapticButtonGeneratorFilterInterpreter::HandleLocalTimer(stime_t now) {
+  // If enough time has passed without an active gesture event assume that we
+  // missed the gesture ending event, to prevent a state where the button is
+  // stuck down.
+  active_gesture_ = false;
+  local_timer_deadline_ = NO_DEADLINE;
 }
 
 void HapticButtonGeneratorFilterInterpreter::ConsumeGesture(
@@ -226,7 +200,7 @@ void HapticButtonGeneratorFilterInterpreter::ConsumeGesture(
       break;
   }
   if (active_gesture_) {
-    active_gesture_deadline_ = gesture.end_time + active_gesture_timeout_;
+    local_timer_deadline_ = gesture.end_time + active_gesture_timeout_;
   }
 
   // When dragging while clicking, users often reduce the force applied, causing

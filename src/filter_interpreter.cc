@@ -44,7 +44,47 @@ void FilterInterpreter::Clear() {
   next_->Clear();
 }
 
-stime_t FilterInterpreter::SetNextDeadlineAndReturnTimeoutVal(
+void FilterInterpreterWithTimer::SyncInterpret(HardwareState& hwstate,
+                                               stime_t* timeout) {
+  stime_t next_timeout = NO_DEADLINE;
+  FilterInterpreter::SyncInterpret(hwstate, &next_timeout);
+  *timeout = SetNextDeadlineAndReturnTimeoutVal(hwstate.timestamp,
+                                                local_timer_deadline_,
+                                                next_timeout);
+}
+
+void FilterInterpreterWithTimer::HandleTimerImpl(stime_t now,
+                                                 stime_t* timeout) {
+  const std::string name = "FilterInterpreterWithTimer::HandleTimerImpl";
+  LogHandleTimerPre(name, now, timeout);
+
+  stime_t next_timeout = NO_DEADLINE;
+  if (ShouldCallNextTimer(local_timer_deadline_)) {
+    // TODO(b/483617477): if the next deadline is earlier than the local one,
+    // then we receive one timer callback after both have passed, we won't
+    // trigger the local timer. We're not aware of any bugs caused by this
+    // currently, but it's probably not the intended behaviour.
+    if (next_timer_deadline_ > now) {
+      Err("Spurious callback. now: %f, next deadline: %f",
+          now, next_timer_deadline_);
+      return;
+    }
+    next_->HandleTimer(now, &next_timeout);
+  } else {
+    if (local_timer_deadline_ > now) {
+      Err("Spurious callback. now: %f, deadline: %f",
+          now, local_timer_deadline_);
+      return;
+    }
+    HandleLocalTimer(now);
+    next_timeout = MaybeCallNextTimer(now);
+  }
+  *timeout = SetNextDeadlineAndReturnTimeoutVal(now, local_timer_deadline_,
+                                                next_timeout);
+  LogHandleTimerPost(name, now, timeout);
+}
+
+stime_t FilterInterpreterWithTimer::SetNextDeadlineAndReturnTimeoutVal(
     stime_t now, stime_t local_deadline, stime_t next_timeout) {
   next_timer_deadline_ = next_timeout > 0.0
                             ? now + next_timeout
@@ -60,14 +100,14 @@ stime_t FilterInterpreter::SetNextDeadlineAndReturnTimeoutVal(
   return std::min(next_timeout, local_timeout);
 }
 
-bool FilterInterpreter::ShouldCallNextTimer(stime_t local_deadline) {
+bool FilterInterpreterWithTimer::ShouldCallNextTimer(stime_t local_deadline) {
   if (local_deadline > 0.0 && next_timer_deadline_ > 0.0)
     return local_deadline > next_timer_deadline_;
   else
     return next_timer_deadline_ > 0.0;
 }
 
-stime_t FilterInterpreter::MaybeCallNextTimer(stime_t now) {
+stime_t FilterInterpreterWithTimer::MaybeCallNextTimer(stime_t now) {
   if (next_timer_deadline_ >= 0.0 && next_timer_deadline_ <= now) {
     stime_t next_timeout = NO_DEADLINE;
     next_->HandleTimer(now, &next_timeout);

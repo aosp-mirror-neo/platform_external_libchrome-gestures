@@ -2,12 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include <memory>
 #include <set>
 #include <gtest/gtest.h>  // for FRIEND_TEST
 
 #include "include/filter_interpreter.h"
-#include "include/finger_metrics.h"
 #include "include/gestures.h"
 #include "include/prop_registry.h"
 #include "include/tracer.h"
@@ -20,7 +18,7 @@ namespace gestures {
 // This interpreter generates the fling-stop messages when new fingers
 // arrive on the pad.
 
-class FlingStopFilterInterpreter : public FilterInterpreter {
+class FlingStopFilterInterpreter : public FilterInterpreterWithTimer {
   FRIEND_TEST(FlingStopFilterInterpreterTest, SimpleTest);
   FRIEND_TEST(FlingStopFilterInterpreterTest, FlingGestureTest);
   FRIEND_TEST(FlingStopFilterInterpreterTest, FlingStopMultimouseMoveTest);
@@ -33,11 +31,12 @@ class FlingStopFilterInterpreter : public FilterInterpreter {
   virtual ~FlingStopFilterInterpreter() {}
 
  protected:
-  virtual void SyncInterpretImpl(HardwareState& hwstate, stime_t* timeout);
+  virtual void SyncInterpretImpl(HardwareState& hwstate,
+                                 stime_t* timeout) override;
 
-  virtual void HandleTimerImpl(stime_t now, stime_t* timeout);
+  virtual void HandleLocalTimer(stime_t now) override;
 
-  virtual void ConsumeGesture(const Gesture& gesture);
+  virtual void ConsumeGesture(const Gesture& gesture) override;
 
  private:
   // May override an outgoing gesture with a fling stop gesture.
@@ -63,9 +62,6 @@ class FlingStopFilterInterpreter : public FilterInterpreter {
   GestureType prev_gesture_type_;
   // Whether a fling stop has been sent since the last gesture.
   bool fling_stop_already_sent_;
-
-  // When we should send fling-stop, or NO_DEADLINE if not set.
-  stime_t fling_stop_deadline_;
 
   // Device class (e.g. touchpad, mouse).
   GestureInterpreterDeviceClass devclass_;

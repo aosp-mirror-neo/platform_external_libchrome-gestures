@@ -19,7 +19,7 @@
 
 namespace gestures {
 
-class HapticButtonGeneratorFilterInterpreter : public FilterInterpreter {
+class HapticButtonGeneratorFilterInterpreter : public FilterInterpreterWithTimer {
   FRIEND_TEST(HapticButtonGeneratorFilterInterpreterTest, SimpleTest);
   FRIEND_TEST(HapticButtonGeneratorFilterInterpreterTest, NotHapticTest);
   FRIEND_TEST(HapticButtonGeneratorFilterInterpreterTest,
@@ -40,12 +40,12 @@ class HapticButtonGeneratorFilterInterpreter : public FilterInterpreter {
                           GestureConsumer* consumer) override;
  protected:
   virtual void SyncInterpretImpl(HardwareState& hwstate,
-                                 stime_t* timeout) override;
+                                 stime_t* next_timeout) override;
+  virtual void HandleLocalTimer(stime_t now) override;
 
  private:
   void ConsumeGesture(const Gesture& gesture) override;
   void HandleHardwareState(HardwareState& hwstate);
-  virtual void HandleTimerImpl(stime_t now, stime_t *timeout) override;
   void UpdatePalmState(const HardwareState& hwstate);
 
   static const size_t kMaxSensitivitySettings = 5;
@@ -65,7 +65,6 @@ class HapticButtonGeneratorFilterInterpreter : public FilterInterpreter {
   // gesture
   bool active_gesture_;
   double active_gesture_timeout_;
-  double active_gesture_deadline_;
 
   // Is the button currently down?
   bool button_down_;

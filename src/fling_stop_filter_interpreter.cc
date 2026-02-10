@@ -11,12 +11,11 @@ namespace gestures {
 FlingStopFilterInterpreter::FlingStopFilterInterpreter(
     PropRegistry* prop_reg, Interpreter* next, Tracer* tracer,
     GestureInterpreterDeviceClass devclass)
-    : FilterInterpreter(nullptr, next, tracer, false),
+    : FilterInterpreterWithTimer(nullptr, next, tracer, false),
       already_extended_(false),
       prev_touch_cnt_(0),
       prev_gesture_type_(kGestureTypeNull),
       fling_stop_already_sent_(false),
-      fling_stop_deadline_(NO_DEADLINE),
       devclass_(devclass),
       fling_stop_timeout_(prop_reg, "Fling Stop Timeout", 0.03),
       fling_stop_extra_delay_(prop_reg, "Fling Stop Extra Delay", 0.055) {
@@ -24,7 +23,7 @@ FlingStopFilterInterpreter::FlingStopFilterInterpreter(
 }
 
 void FlingStopFilterInterpreter::SyncInterpretImpl(HardwareState& hwstate,
-                                                   stime_t* timeout) {
+                                                   stime_t* next_timeout) {
   const char name[] = "FlingStopFilterInterpreter::SyncInterpretImpl";
   LogHardwareStatePre(name, hwstate);
 
@@ -33,12 +32,12 @@ void FlingStopFilterInterpreter::SyncInterpretImpl(HardwareState& hwstate,
     fingers_of_last_hwstate_.insert(hwstate.fingers[i].tracking_id);
 
   UpdateFlingStopDeadline(hwstate);
-  if (fling_stop_deadline_ != NO_DEADLINE) {
+  if (local_timer_deadline_ != NO_DEADLINE) {
     if (!already_extended_ && NeedsExtraTime(hwstate)) {
-      fling_stop_deadline_ += fling_stop_extra_delay_.val_;
+      local_timer_deadline_ += fling_stop_extra_delay_.val_;
       already_extended_ = true;
     }
-    if (hwstate.timestamp > fling_stop_deadline_) {
+    if (hwstate.timestamp > local_timer_deadline_) {
       // sub in a fling before processing other interpreters
       auto fling_tap_down = Gesture(kGestureFling, prev_timestamp_,
                                     hwstate.timestamp, 0.0, 0.0,
@@ -47,17 +46,12 @@ void FlingStopFilterInterpreter::SyncInterpretImpl(HardwareState& hwstate,
       ProduceGesture(fling_tap_down);
 
       fling_stop_already_sent_ = true;
-      fling_stop_deadline_ = NO_DEADLINE;
+      local_timer_deadline_ = NO_DEADLINE;
     }
   }
 
-  stime_t next_timeout = NO_DEADLINE;
   LogHardwareStatePost(name, hwstate);
-  next_->SyncInterpret(hwstate, &next_timeout);
-
-  *timeout = SetNextDeadlineAndReturnTimeoutVal(hwstate.timestamp,
-                                                fling_stop_deadline_,
-                                                next_timeout);
+  next_->SyncInterpret(hwstate, next_timeout);
 }
 
 bool FlingStopFilterInterpreter::NeedsExtraTime(
@@ -105,7 +99,7 @@ void FlingStopFilterInterpreter::ConsumeGesture(const Gesture& gesture) {
   LogGestureProduce(name, gesture);
   ProduceGesture(gesture);
 
-  fling_stop_deadline_ = NO_DEADLINE;
+  local_timer_deadline_ = NO_DEADLINE;
   prev_gesture_type_ = gesture.type;
   fling_stop_already_sent_ = false;
 }
@@ -118,9 +112,9 @@ void FlingStopFilterInterpreter::UpdateFlingStopDeadline(
   stime_t now = hwstate.timestamp;
   bool finger_added = hwstate.touch_cnt > prev_touch_cnt_;
 
-  if (finger_added && fling_stop_deadline_ == NO_DEADLINE) {
+  if (finger_added && local_timer_deadline_ == NO_DEADLINE) {
     // first finger added in a while. Note it.
-    fling_stop_deadline_ = now + fling_stop_timeout_.val_;
+    local_timer_deadline_ = now + fling_stop_timeout_.val_;
     return;
   }
 
@@ -128,41 +122,16 @@ void FlingStopFilterInterpreter::UpdateFlingStopDeadline(
   prev_touch_cnt_ = hwstate.touch_cnt;
 }
 
-void FlingStopFilterInterpreter::HandleTimerImpl(stime_t now,
-                                                 stime_t* timeout) {
-  const char name[] = "FlingStopFilterInterpreter::HandleTimerImpl";
-  LogHandleTimerPre(name, now, timeout);
+void FlingStopFilterInterpreter::HandleLocalTimer(stime_t now) {
+  const char name[] = "FlingStopFilterInterpreter::HandleLocalTimer";
+  local_timer_deadline_ = NO_DEADLINE;
+  auto fling_tap_down = Gesture(kGestureFling, prev_timestamp_,
+                                now, 0.0, 0.0,
+                                GESTURES_FLING_TAP_DOWN);
+  LogGestureProduce(name, fling_tap_down);
+  ProduceGesture(fling_tap_down);
 
-  stime_t next_timeout;
-  // TODO(b/483321024): deduplicate this logic with other filter interpreters
-  // and write unit tests for it.
-  if (ShouldCallNextTimer(fling_stop_deadline_)) {
-    if (next_timer_deadline_ > now) {
-      Err("Spurious callback. now: %f, fs deadline: %f, next deadline: %f",
-          now, fling_stop_deadline_, next_timer_deadline_);
-      return;
-    }
-    next_timeout = NO_DEADLINE;
-    next_->HandleTimer(now, &next_timeout);
-  } else {
-    if (fling_stop_deadline_ > now) {
-      Err("Spurious callback. now: %f, fs deadline: %f, next deadline: %f",
-          now, fling_stop_deadline_, next_timer_deadline_);
-      return;
-    }
-    fling_stop_deadline_ = NO_DEADLINE;
-    auto fling_tap_down = Gesture(kGestureFling, prev_timestamp_,
-                                  now, 0.0, 0.0,
-                                  GESTURES_FLING_TAP_DOWN);
-    LogGestureProduce(name, fling_tap_down);
-    ProduceGesture(fling_tap_down);
-
-    fling_stop_already_sent_ = true;
-    next_timeout = MaybeCallNextTimer(now);
-  }
-  *timeout = SetNextDeadlineAndReturnTimeoutVal(now, fling_stop_deadline_,
-                                                next_timeout);
-  LogHandleTimerPost(name, now, timeout);
+  fling_stop_already_sent_ = true;
 }
 
 }  // namespace gestures

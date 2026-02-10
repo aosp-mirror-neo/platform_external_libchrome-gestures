@@ -185,7 +185,7 @@ TEST(HapticButtonGeneratorFilterInterpreterTest, NotHapticConsumeGestureTest) {
   HapticButtonGeneratorFilterInterpreter interpreter(
       nullptr, nullptr, nullptr);
   interpreter.is_haptic_pad_ = false;
-  interpreter.active_gesture_deadline_ = 0.0;
+  interpreter.local_timer_deadline_ = 0.0;
   interpreter.release_suppress_factor_ = 0.0;
 
   const Gesture kFling(kGestureFling, 0, 0, 20, 0, GESTURES_FLING_START);
@@ -197,13 +197,13 @@ TEST(HapticButtonGeneratorFilterInterpreterTest, NotHapticConsumeGestureTest) {
   interpreter.active_gesture_ = false;
   interpreter.ConsumeGesture(kFling);
   EXPECT_FALSE(interpreter.active_gesture_);
-  EXPECT_EQ(interpreter.active_gesture_deadline_, 0.0);
+  EXPECT_EQ(interpreter.local_timer_deadline_, 0.0);
   EXPECT_EQ(interpreter.release_suppress_factor_, 0.0);
 
   interpreter.active_gesture_ = true;
   interpreter.ConsumeGesture(kFling);
   EXPECT_TRUE(interpreter.active_gesture_);
-  EXPECT_EQ(interpreter.active_gesture_deadline_, 0.0);
+  EXPECT_EQ(interpreter.local_timer_deadline_, 0.0);
   EXPECT_EQ(interpreter.release_suppress_factor_, 0.0);
 
   // Verify no state change happens when a MOVE is sent to haptics
@@ -211,13 +211,13 @@ TEST(HapticButtonGeneratorFilterInterpreterTest, NotHapticConsumeGestureTest) {
   interpreter.active_gesture_ = false;
   interpreter.ConsumeGesture(kMove);
   EXPECT_FALSE(interpreter.active_gesture_);
-  EXPECT_EQ(interpreter.active_gesture_deadline_, 0.0);
+  EXPECT_EQ(interpreter.local_timer_deadline_, 0.0);
   EXPECT_EQ(interpreter.release_suppress_factor_, 0.0);
 
   interpreter.active_gesture_ = true;
   interpreter.ConsumeGesture(kMove);
   EXPECT_TRUE(interpreter.active_gesture_);
-  EXPECT_EQ(interpreter.active_gesture_deadline_, 0.0);
+  EXPECT_EQ(interpreter.local_timer_deadline_, 0.0);
   EXPECT_EQ(interpreter.release_suppress_factor_, 0.0);
 
   // Verify no state change happens when a Scroll is sent to haptics
@@ -225,13 +225,13 @@ TEST(HapticButtonGeneratorFilterInterpreterTest, NotHapticConsumeGestureTest) {
   interpreter.active_gesture_ = false;
   interpreter.ConsumeGesture(kScroll);
   EXPECT_FALSE(interpreter.active_gesture_);
-  EXPECT_EQ(interpreter.active_gesture_deadline_, 0.0);
+  EXPECT_EQ(interpreter.local_timer_deadline_, 0.0);
   EXPECT_EQ(interpreter.release_suppress_factor_, 0.0);
 
   interpreter.active_gesture_ = true;
   interpreter.ConsumeGesture(kScroll);
   EXPECT_TRUE(interpreter.active_gesture_);
-  EXPECT_EQ(interpreter.active_gesture_deadline_, 0.0);
+  EXPECT_EQ(interpreter.local_timer_deadline_, 0.0);
   EXPECT_EQ(interpreter.release_suppress_factor_, 0.0);
 }
 

@@ -131,7 +131,7 @@ TEST(FlingStopFilterInterpreterTest, SimpleTest) {
       EXPECT_FALSE(base_interpreter->sync_interpret_called_) << "i=" << i;
     }
     EXPECT_FLOAT_EQ(input.expected_local_deadline,
-                    interpreter.fling_stop_deadline_) << "i=" << i;
+                    interpreter.local_timer_deadline_) << "i=" << i;
     EXPECT_FLOAT_EQ(input.expected_next_deadline,
                     interpreter.next_timer_deadline_) << "i=" << i;
     EXPECT_FLOAT_EQ(input.expected_timeout, timeout) << "i=" << i;
