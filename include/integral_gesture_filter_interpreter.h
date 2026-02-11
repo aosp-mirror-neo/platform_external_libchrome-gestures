@@ -31,8 +31,6 @@ class IntegralGestureFilterInterpreter : public FilterInterpreterWithTimer {
   virtual void SyncInterpretImpl(HardwareState& hwstate, stime_t* next_timeout);
   virtual void ConsumeGesture(const Gesture& gesture);
 
-  Gesture* HandleGesture(Gesture* gs);
-
   float hscroll_remainder_, vscroll_remainder_;
   float hscroll_ordinal_remainder_, vscroll_ordinal_remainder_;
   bool can_clear_remainders_;
