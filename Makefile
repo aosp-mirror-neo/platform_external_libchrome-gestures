@@ -148,7 +148,7 @@ CXXFLAGS+=\
 	--coverage \
 	-ftest-coverage \
 	-fprofile-arcs
-LINK_FLAGS+=-lgcov
+LINK_FLAGS+=--coverage
 endif
 
 PKG_CONFIG ?= pkg-config
@@ -163,7 +163,7 @@ LINK_FLAGS+=\
 	-lrt
 
 TEST_LINK_FLAGS=\
-	-lgcov \
+	--coverage \
 	-lgtest
 
 all: $(SONAME)
