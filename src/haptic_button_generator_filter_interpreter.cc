@@ -33,7 +33,7 @@ HapticButtonGeneratorFilterInterpreter::HapticButtonGeneratorFilterInterpreter(
       custom_up_threshold_(prop_reg,
                             "Custom Haptic Button Force Threshold Up",
                             130.0),
-      enabled_(prop_reg, "Enable Haptic Button Generation", false),
+      enabled_(prop_reg, "Enable Haptic Button Generation", true),
       force_scale_(prop_reg, "Force Calibration Slope", 1.0),
       force_translate_(prop_reg, "Force Calibration Offset", 0.0),
       complete_release_suppress_speed_(
