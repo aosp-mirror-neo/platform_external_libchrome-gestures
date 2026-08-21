@@ -1993,13 +1993,29 @@ void ImmediateInterpreter::GenerateFingerLiftGesture() {
     // set current_gesture_type_ in this case, we'd never actually produce the
     // fling gesture because the result in SyncInterpretImpl had already been
     // set to the button change gesture. So, we need to produce it immediately.
-    // (The same issue does not seem to affect 3- and 4-finger swipes.)
     std::optional<Gesture> fling =
         scroll_manager_.FillResultFling(state_buffer_, scroll_buffer_);
     if (fling.has_value()) {
       LogGestureProduce("ImmediateInterpreter::GenerateFingerLiftGesture",
                         fling.value());
       ProduceGesture(fling.value());
+    }
+  } else if (lift_gesture_type == kGestureTypeSwipeLift) {
+    if (three_finger_swipe_enable_.val_) {
+      Gesture result(kGestureSwipeLift, state_buffer_.Get(1).timestamp,
+                     state_buffer_.Get(0).timestamp);
+      LogGestureProduce("ImmediateInterpreter::GenerateFingerLiftGesture",
+                        result);
+      ProduceGesture(result);
+    }
+  } else if (lift_gesture_type == kGestureTypeFourFingerSwipeLift) {
+    if (three_finger_swipe_enable_.val_) {
+      Gesture result(kGestureFourFingerSwipeLift,
+                     state_buffer_.Get(1).timestamp,
+                     state_buffer_.Get(0).timestamp);
+      LogGestureProduce("ImmediateInterpreter::GenerateFingerLiftGesture",
+                        result);
+      ProduceGesture(result);
     }
   } else {
     current_gesture_type_ = lift_gesture_type;
@@ -3399,21 +3415,8 @@ std::optional<Gesture> ImmediateInterpreter::FillResultGesture(
       }
       break;
     }
-    case kGestureTypeSwipeLift: {
-      if (!three_finger_swipe_enable_.val_)
-        break;
-      result = Gesture(kGestureSwipeLift, state_buffer_.Get(1).timestamp,
-                       hwstate.timestamp);
-      break;
-    }
-
-    case kGestureTypeFourFingerSwipeLift: {
-      if (!three_finger_swipe_enable_.val_)
-        break;
-      result = Gesture(kGestureFourFingerSwipeLift,
-                       state_buffer_.Get(1).timestamp, hwstate.timestamp);
-      break;
-    }
+    // Lift gestures (swipe lift, four finger swipe lift) are handled by
+    // GenerateFingerLiftGesture.
     case kGestureTypePinch: {
       if (pinch_status_ == GESTURES_ZOOM_START ||
           (pinch_status_ == GESTURES_ZOOM_END &&

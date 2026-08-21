@@ -3286,6 +3286,132 @@ TEST(ImmediateInterpreterTest, SwipeEndAndButtonChangeOnSameSync) {
   EXPECT_EQ(kGestureTypeButtonsChange, gs->type);
 }
 
+TEST(ImmediateInterpreterTest, ThreeFingerSwipeLiftAndButtonChangeOnSameSync) {
+  ImmediateInterpreter ii(nullptr, nullptr);
+  HardwareProperties hwprops = {
+    .right = 1000,
+    .bottom = 1000,
+    .res_x = 50,
+    .res_y = 50,
+    .orientation_minimum = 0,
+    .orientation_maximum = 0,
+    .max_finger_cnt = 5,
+    .max_touch_cnt = 5,
+    .supports_t5r2 = false,
+    .support_semi_mt = false,
+    .is_button_pad = false,
+    .has_wheel = false,
+    .wheel_is_hi_res = false,
+    // On haptic touchpads, button_evaluation_timeout is 0, emitting the button
+    // down event immediately upon press. This ensures SwipeLift and
+    // ButtonsChange occur in the same sync frame to test that SwipeLift is not
+    // dropped.
+    .is_haptic_pad = true,
+  };
+  TestInterpreterWrapper wrapper(&ii, &hwprops);
+
+  // Frame 1: Fingers are added.
+  FingerState fingers_appear[] = {
+    {0, 0, 0, 0, 50, 0, 450, 400, 2, 0},
+    {0, 0, 0, 0, 50, 0, 480, 400, 3, 0},
+    {0, 0, 0, 0, 50, 0, 510, 400, 4, 0},
+  };
+  HardwareState curr_frame =
+      make_hwstate(0.1, GESTURES_BUTTON_NONE, 3, 3, fingers_appear);
+  Gesture* gs = wrapper.SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 2: Swiping begins.
+  FingerState swiping_fingers[] = {
+    {0, 0, 0, 0, 50, 0, 450, 391, 2, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 480, 379, 3, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 510, 379, 4, GESTURES_FINGER_TREND_DEC_Y},
+  };
+  curr_frame = make_hwstate(0.2, GESTURES_BUTTON_NONE, 3, 3, swiping_fingers);
+  gs = wrapper.SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeSwipe, gs->type);
+
+  // Frame 3: Button pressed on haptic touchpad during swipe.
+  // Both SwipeLift and ButtonsChange must be produced in this exact sync.
+  FingerState swiping_fingers_2[] = {
+    {0, 0, 0, 0, 50, 0, 450, 371, 2, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 480, 359, 3, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 510, 359, 4, GESTURES_FINGER_TREND_DEC_Y},
+  };
+  curr_frame = make_hwstate(0.3, GESTURES_BUTTON_LEFT, 3, 3, swiping_fingers_2);
+  std::vector<Gesture> gestures =
+      wrapper.SyncInterpretMulti(curr_frame, nullptr);
+  ASSERT_EQ(2, gestures.size());
+  EXPECT_EQ(kGestureTypeSwipeLift, gestures[0].type);
+  EXPECT_EQ(kGestureTypeButtonsChange, gestures[1].type);
+}
+
+TEST(ImmediateInterpreterTest, FourFingerSwipeLiftAndButtonChangeOnSameSync) {
+  ImmediateInterpreter ii(nullptr, nullptr);
+  HardwareProperties hwprops = {
+    .right = 1000,
+    .bottom = 1000,
+    .res_x = 50,
+    .res_y = 50,
+    .orientation_minimum = 0,
+    .orientation_maximum = 0,
+    .max_finger_cnt = 5,
+    .max_touch_cnt = 5,
+    .supports_t5r2 = false,
+    .support_semi_mt = false,
+    .is_button_pad = false,
+    .has_wheel = false,
+    .wheel_is_hi_res = false,
+    // On haptic touchpads, button_evaluation_timeout is 0, emitting the button
+    // down event immediately upon press. This ensures FourFingerSwipeLift and
+    // ButtonsChange occur in the same sync frame to test that the swipe lift
+    // is not dropped.
+    .is_haptic_pad = true,
+  };
+  TestInterpreterWrapper wrapper(&ii, &hwprops);
+
+  // Frame 1: Fingers are added.
+  FingerState fingers_appear[] = {
+    {0, 0, 0, 0, 50, 0, 420, 400, 1, 0},
+    {0, 0, 0, 0, 50, 0, 450, 400, 2, 0},
+    {0, 0, 0, 0, 50, 0, 480, 400, 3, 0},
+    {0, 0, 0, 0, 50, 0, 510, 400, 4, 0},
+  };
+  HardwareState curr_frame =
+      make_hwstate(0.1, GESTURES_BUTTON_NONE, 4, 4, fingers_appear);
+  Gesture* gs = wrapper.SyncInterpret(curr_frame, nullptr);
+  EXPECT_EQ(nullptr, gs);
+
+  // Frame 2: Four-finger swiping begins.
+  FingerState swiping_fingers[] = {
+    {0, 0, 0, 0, 50, 0, 420, 379, 1, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 450, 379, 2, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 480, 379, 3, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 510, 379, 4, GESTURES_FINGER_TREND_DEC_Y},
+  };
+  curr_frame = make_hwstate(0.2, GESTURES_BUTTON_NONE, 4, 4, swiping_fingers);
+  gs = wrapper.SyncInterpret(curr_frame, nullptr);
+  ASSERT_NE(nullptr, gs);
+  EXPECT_EQ(kGestureTypeFourFingerSwipe, gs->type);
+
+  // Frame 3: Button pressed on haptic touchpad during swipe.
+  // Both FourFingerSwipeLift and ButtonsChange must be produced in this exact
+  // sync.
+  FingerState swiping_fingers_2[] = {
+    {0, 0, 0, 0, 50, 0, 420, 369, 1, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 450, 369, 2, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 480, 369, 3, GESTURES_FINGER_TREND_DEC_Y},
+    {0, 0, 0, 0, 50, 0, 510, 369, 4, GESTURES_FINGER_TREND_DEC_Y},
+  };
+  curr_frame = make_hwstate(0.3, GESTURES_BUTTON_LEFT, 4, 4, swiping_fingers_2);
+  std::vector<Gesture> gestures =
+      wrapper.SyncInterpretMulti(curr_frame, nullptr);
+  ASSERT_EQ(2, gestures.size());
+  EXPECT_EQ(kGestureTypeFourFingerSwipeLift, gestures[0].type);
+  EXPECT_EQ(kGestureTypeButtonsChange, gestures[1].type);
+}
+
 
 struct BottomRightClickAreaParameters {
   bool enabled;
